@@ -18,6 +18,11 @@ A simple block placement system for Minetest that allows placing block B next to
    - Searches within reach distance (4.5 blocks, but configurable)
    - Should work with all standard Minetest blocks
 
+3. **Cross-Platform Input Support**
+   - **Desktop/PC**: Uses right-click to place blocks
+   - **Android/Touch Devices**: Automatically detects touch controls and uses tap (punch) to place blocks
+   - Seamless experience across all platforms without manual configuration
+
 ## Installation
 
 1. Download or clone this mod to your Minetest mods directory
@@ -29,14 +34,17 @@ A simple block placement system for Minetest that allows placing block B next to
 ### Basic Usage
 - Hold any placeable block in your hand
 - Look around - you'll see semi-transparent ghost blocks appear next to existing blocks (horizontally only)
-- Right-click on a ghost block to place the real block there
+- **Desktop/PC**: Right-click on a ghost block to place the real block there
+- **Android/Touch Devices**: Tap (punch) on a ghost block to place the real block there
 - The block will be consumed from your inventory (unless in creative mode)
 - No configuration needed - it just works!
 
 ### How It Works
 - When you hold a placeable block, the mod shows a semi-transparent ghost block at valid horizontal placement positions
 - Ghost blocks only appear next to other blocks horizontally (same Y level) - never on top or below
-- Right-click the ghost block to place the actual block and consume it from your inventory
+- **Desktop/PC**: Right-click the ghost block to place the actual block and consume it from your inventory
+- **Android/Touch Devices**: Tap (punch) the ghost block to place the actual block and consume it from your inventory
+- The mod automatically detects if you're using touch controls and adjusts the input method accordingly
 - Normal block placement is not overridden - this only adds the ghost block preview system
 
 ## Compatibility

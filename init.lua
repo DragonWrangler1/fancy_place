@@ -16,6 +16,7 @@ fancy_place = {
 	update_interval = tonumber(minetest.settings:get("fancy_place_update_interval")) or 0.2,
 	instant_updates = minetest.settings:get_bool("fancy_place_instant_updates", true),
 	show_config = minetest.settings:get_bool("fancy_place_show_config", false),
+	player_touch_controls = {}, -- Cache touch control status per player
 }
 
 -- Show configuration if requested
@@ -29,12 +30,36 @@ if fancy_place.show_config then
 	minetest.log("action", "  Play Sounds: " .. tostring(fancy_place.play_sounds))
 	minetest.log("action", "  Update Interval: " .. fancy_place.update_interval)
 	minetest.log("action", "  Instant Updates: " .. tostring(fancy_place.instant_updates))
+	minetest.log("action", "  Android Detection: Automatic (tap to place on touch devices)")
 end
 
 -- Utility functions
 local function get_node_safe(pos)
 	if not pos then return {name = "ignore"} end
 	return minetest.get_node_or_nil(pos) or {name = "ignore"}
+end
+
+-- Check if player is using touch controls (Android detection)
+local function is_touch_controls_player(player_name)
+	-- Check cache first
+	if fancy_place.player_touch_controls[player_name] ~= nil then
+		return fancy_place.player_touch_controls[player_name]
+	end
+	
+	-- Get player information
+	local player_info = minetest.get_player_information(player_name)
+	if player_info and player_info.touch_controls ~= nil then
+		-- Cache the result and log detection
+		fancy_place.player_touch_controls[player_name] = player_info.touch_controls
+		if player_info.touch_controls and fancy_place.show_config then
+			minetest.log("action", "[Fancy Place] Touch controls detected for player " .. player_name .. " - using tap to place")
+		end
+		return player_info.touch_controls
+	end
+	
+	-- Default to false if information is not available
+	fancy_place.player_touch_controls[player_name] = false
+	return false
 end
 
 -- Apply opacity to texture name
@@ -241,16 +266,17 @@ minetest.register_entity("fancy_place:ghost_block", {
 		end
 	end,
 
-	on_rightclick = function(self, clicker)
+	-- Shared function for placing blocks (used by both rightclick and punch)
+	place_block = function(self, clicker)
 		if not clicker or not clicker:is_player() then
-			return
+			return false
 		end
 
 		local player_name = clicker:get_player_name()
 
 		-- Only allow the owner to place the block
 		if player_name ~= self.player_name then
-			return
+			return false
 		end
 
 		local wielded = clicker:get_wielded_item()
@@ -258,26 +284,26 @@ minetest.register_entity("fancy_place:ghost_block", {
 
 		-- Check if the player is holding the correct block
 		if item_name ~= self.node_name then
-			return
+			return false
 		end
 
 		local pos = self.object:get_pos()
-		if not pos then return end
+		if not pos then return false end
 
 		-- Check protection
 		if minetest.is_protected(pos, player_name) then
 			minetest.record_protection_violation(pos, player_name)
-			return
+			return false
 		end
 
 		-- Check if we can still place the node
 		if not is_buildable_to(pos) then
-			return
+			return false
 		end
 
 		-- Get node definition for callbacks and sounds
 		local def = minetest.registered_nodes[item_name]
-		if not def then return end
+		if not def then return false end
 
 		-- Place the node
 		minetest.set_node(pos, {name = item_name})
@@ -314,6 +340,35 @@ minetest.register_entity("fancy_place:ghost_block", {
 		
 		-- Remove the ghost block
 		remove_ghost_block(player_name)
+		return true
+	end,
+
+	on_rightclick = function(self, clicker)
+		if not clicker or not clicker:is_player() then
+			return
+		end
+
+		local player_name = clicker:get_player_name()
+		
+		-- For touch control users (Android), use punch instead of rightclick
+		if is_touch_controls_player(player_name) then
+			return
+		end
+		
+		self:place_block(clicker)
+	end,
+
+	on_punch = function(self, puncher, time_from_last_punch, tool_capabilities, direction, damage)
+		if not puncher or not puncher:is_player() then
+			return
+		end
+
+		local player_name = puncher:get_player_name()
+		
+		-- For touch control users (Android), use punch for placing
+		if is_touch_controls_player(player_name) then
+			self:place_block(puncher)
+		end
 	end,
 })
 
@@ -384,6 +439,8 @@ end
 minetest.register_on_leaveplayer(function(player)
 	local player_name = player:get_player_name()
 	remove_ghost_block(player_name)
+	-- Clear touch controls cache
+	fancy_place.player_touch_controls[player_name] = nil
 end)
 
 -- Initialize mod
