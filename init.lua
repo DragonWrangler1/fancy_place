@@ -1,63 +1,62 @@
 -- Fancy Place Mod
 -- Simple block placement system - shows ghost blocks next to blocks (not on top or below)
--- Right-click ghost blocks to place them
+-- Desktop/PC: Right-click ghost blocks to place them
+-- Android/Touch: Tap (punch) ghost blocks to place them - automatically detected
 
-local modname = minetest.get_current_modname()
+local modname = core.get_current_modname()
 
 -- Simple configuration
 fancy_place = {
-	reach_distance = tonumber(minetest.settings:get("fancy_place_reach_distance")) or 4.5,
+	reach_distance = tonumber(core.settings:get("fancy_place_reach_distance")) or 4.5,
 	ghost_blocks = {}, -- Store ghost block entities per player
-	ghost_opacity = tonumber(minetest.settings:get("fancy_place_ghost_opacity")) or 128,
-	ghost_glow = tonumber(minetest.settings:get("fancy_place_ghost_glow")) or 8,
-	ghost_size = tonumber(minetest.settings:get("fancy_place_ghost_size")) or 1.02,
-	allow_diagonal = minetest.settings:get_bool("fancy_place_allow_diagonal", true),
-	play_sounds = minetest.settings:get_bool("fancy_place_play_sounds", true),
-	update_interval = tonumber(minetest.settings:get("fancy_place_update_interval")) or 0.2,
-	instant_updates = minetest.settings:get_bool("fancy_place_instant_updates", true),
-	show_config = minetest.settings:get_bool("fancy_place_show_config", false),
+	ghost_opacity = tonumber(core.settings:get("fancy_place_ghost_opacity")) or 128,
+	ghost_glow = tonumber(core.settings:get("fancy_place_ghost_glow")) or 8,
+	ghost_size = tonumber(core.settings:get("fancy_place_ghost_size")) or 1.02,
+	allow_diagonal = core.settings:get_bool("fancy_place_allow_diagonal", true),
+	play_sounds = core.settings:get_bool("fancy_place_play_sounds", true),
+	update_interval = tonumber(core.settings:get("fancy_place_update_interval")) or 0.2,
+	instant_updates = core.settings:get_bool("fancy_place_instant_updates", true),
+	show_config = core.settings:get_bool("fancy_place_show_config", false),
 	player_touch_controls = {}, -- Cache touch control status per player
 }
 
 -- Show configuration if requested
 if fancy_place.show_config then
-	minetest.log("action", "[Fancy Place] Configuration loaded:")
-	minetest.log("action", "  Reach Distance: " .. fancy_place.reach_distance)
-	minetest.log("action", "  Ghost Opacity: " .. fancy_place.ghost_opacity)
-	minetest.log("action", "  Ghost Glow: " .. fancy_place.ghost_glow)
-	minetest.log("action", "  Ghost Size: " .. fancy_place.ghost_size)
-	minetest.log("action", "  Allow Diagonal: " .. tostring(fancy_place.allow_diagonal))
-	minetest.log("action", "  Play Sounds: " .. tostring(fancy_place.play_sounds))
-	minetest.log("action", "  Update Interval: " .. fancy_place.update_interval)
-	minetest.log("action", "  Instant Updates: " .. tostring(fancy_place.instant_updates))
-	minetest.log("action", "  Android Detection: Automatic (tap to place on touch devices)")
+	core.log("action", "[Fancy Place] Configuration loaded:")
+	core.log("action", "  Reach Distance: " .. fancy_place.reach_distance)
+	core.log("action", "  Ghost Opacity: " .. fancy_place.ghost_opacity)
+	core.log("action", "  Ghost Glow: " .. fancy_place.ghost_glow)
+	core.log("action", "  Ghost Size: " .. fancy_place.ghost_size)
+	core.log("action", "  Allow Diagonal: " .. tostring(fancy_place.allow_diagonal))
+	core.log("action", "  Play Sounds: " .. tostring(fancy_place.play_sounds))
+	core.log("action", "  Update Interval: " .. fancy_place.update_interval)
+	core.log("action", "  Instant Updates: " .. tostring(fancy_place.instant_updates))
+	core.log("action", "  Android Detection: Automatic (tap to place on touch devices)")
 end
 
 -- Utility functions
 local function get_node_safe(pos)
 	if not pos then return {name = "ignore"} end
-	return minetest.get_node_or_nil(pos) or {name = "ignore"}
+	return core.get_node_or_nil(pos) or {name = "ignore"}
 end
 
--- Check if player is using touch controls (Android detection)
 local function is_touch_controls_player(player_name)
-	-- Check cache first
 	if fancy_place.player_touch_controls[player_name] ~= nil then
 		return fancy_place.player_touch_controls[player_name]
 	end
 	
-	-- Get player information
-	local player_info = minetest.get_player_information(player_name)
-	if player_info and player_info.touch_controls ~= nil then
-		-- Cache the result and log detection
-		fancy_place.player_touch_controls[player_name] = player_info.touch_controls
-		if player_info.touch_controls and fancy_place.show_config then
-			minetest.log("action", "[Fancy Place] Touch controls detected for player " .. player_name .. " - using tap to place")
+	local window_info = core.get_player_window_information(player_name)
+	if window_info and window_info.touch_controls ~= nil then
+		fancy_place.player_touch_controls[player_name] = window_info.touch_controls
+		if window_info.touch_controls and fancy_place.show_config then
+			core.log("error", "[Fancy Place] Touch controls detected for player " .. player_name .. " - using tap to place")
+		else
+			core.log("error", "[Fancy Place] PC controls detected for player " .. player_name .. " - using right-click to place")
 		end
-		return player_info.touch_controls
+		return window_info.touch_controls
 	end
 	
-	-- Default to false if information is not available
+	-- Default to false if information is not available (older clients or no touch controls)
 	fancy_place.player_touch_controls[player_name] = false
 	return false
 end
@@ -72,13 +71,13 @@ end
 
 local function is_buildable_to(pos)
 	local node = get_node_safe(pos)
-	local def = minetest.registered_nodes[node.name]
+	local def = core.registered_nodes[node.name]
 	return def and def.buildable_to
 end
 
 local function is_solid_node(pos)
 	local node = get_node_safe(pos)
-	local def = minetest.registered_nodes[node.name]
+	local def = core.registered_nodes[node.name]
 	return def and not def.buildable_to and def.walkable ~= false
 end
 
@@ -162,15 +161,15 @@ end
 local function create_ghost_block(player_name, pos, node_name)
 	remove_ghost_block(player_name)
 
-	local player = minetest.get_player_by_name(player_name)
+	local player = core.get_player_by_name(player_name)
 	if not player then return end
 
 	-- Get the node definition to determine appearance
-	local def = minetest.registered_nodes[node_name]
+	local def = core.registered_nodes[node_name]
 	if not def then return end
 
 	-- Create a temporary entity for the ghost block
-	local obj = minetest.add_entity(pos, "fancy_place:ghost_block")
+	local obj = core.add_entity(pos, "fancy_place:ghost_block")
 	if obj then
 		local ent = obj:get_luaentity()
 		if ent then
@@ -236,7 +235,7 @@ local function create_ghost_block(player_name, pos, node_name)
 end
 
 -- Ghost block entity definition
-minetest.register_entity("fancy_place:ghost_block", {
+core.register_entity("fancy_place:ghost_block", {
 	initial_properties = {
 		visual = "cube",
 		visual_size = {x = fancy_place.ghost_size, y = fancy_place.ghost_size, z = fancy_place.ghost_size},
@@ -260,7 +259,7 @@ minetest.register_entity("fancy_place:ghost_block", {
 		self.timer = self.timer + dtime
 
 		-- Only remove if player is gone (no timeout removal)
-		if not minetest.get_player_by_name(self.player_name) then
+		if not core.get_player_by_name(self.player_name) then
 			self.object:remove()
 			return
 		end
@@ -291,8 +290,8 @@ minetest.register_entity("fancy_place:ghost_block", {
 		if not pos then return false end
 
 		-- Check protection
-		if minetest.is_protected(pos, player_name) then
-			minetest.record_protection_violation(pos, player_name)
+		if core.is_protected(pos, player_name) then
+			core.record_protection_violation(pos, player_name)
 			return false
 		end
 
@@ -302,15 +301,15 @@ minetest.register_entity("fancy_place:ghost_block", {
 		end
 
 		-- Get node definition for callbacks and sounds
-		local def = minetest.registered_nodes[item_name]
+		local def = core.registered_nodes[item_name]
 		if not def then return false end
 
 		-- Place the node
-		minetest.set_node(pos, {name = item_name})
+		core.set_node(pos, {name = item_name})
 
 		-- Play sound
 		if fancy_place.play_sounds and def.sounds and def.sounds.place then
-			minetest.sound_play(def.sounds.place, {pos = pos, gain = 1.0})
+			core.sound_play(def.sounds.place, {pos = pos, gain = 1.0})
 		end
 
 		-- Find an adjacent solid block for the after_place_node callback
@@ -333,7 +332,7 @@ minetest.register_entity("fancy_place:ghost_block", {
 		end
 
 		-- Consume item
-		if not minetest.settings:get_bool("creative_mode") and not minetest.check_player_privs(player_name, "creative") then
+		if not core.settings:get_bool("creative_mode") and not core.check_player_privs(player_name, "creative") then
 			wielded:take_item()
 			clicker:set_wielded_item(wielded)
 		end
@@ -379,7 +378,7 @@ local function get_player_pointed_thing(player)
 	local end_pos = vector.add(eye_pos, vector.multiply(look_dir, fancy_place.reach_distance))
 	
 	-- Perform raycast
-	local raycast = minetest.raycast(eye_pos, end_pos, false, false)
+	local raycast = core.raycast(eye_pos, end_pos, false, false)
 	local pointed_thing = raycast:next()
 	
 	if pointed_thing then
@@ -392,13 +391,13 @@ end
 
 -- Ghost block preview update
 local function update_ghost_preview()
-	for _, player in ipairs(minetest.get_connected_players()) do
+	for _, player in ipairs(core.get_connected_players()) do
 		local player_name = player:get_player_name()
 		local wielded = player:get_wielded_item()
 		local item_name = wielded:get_name()
 		
 		-- Check if player is holding a placeable item
-		if item_name ~= "" and minetest.registered_nodes[item_name] then
+		if item_name ~= "" and core.registered_nodes[item_name] then
 			-- Get actual pointed_thing from raycast
 			local pointed_thing = get_player_pointed_thing(player)
 			
@@ -436,7 +435,7 @@ local function update_ghost_preview()
 end
 
 -- Cleanup on player leave
-minetest.register_on_leaveplayer(function(player)
+core.register_on_leaveplayer(function(player)
 	local player_name = player:get_player_name()
 	remove_ghost_block(player_name)
 	-- Clear touch controls cache
@@ -444,10 +443,10 @@ minetest.register_on_leaveplayer(function(player)
 end)
 
 -- Initialize mod
-minetest.register_on_mods_loaded(function()
+core.register_on_mods_loaded(function()
 	-- Start ghost block preview timer
 	local timer = 0
-	minetest.register_globalstep(function(dtime)
+	core.register_globalstep(function(dtime)
 		timer = timer + dtime
 		if timer >= fancy_place.update_interval then
 			timer = 0
@@ -455,5 +454,5 @@ minetest.register_on_mods_loaded(function()
 		end
 	end)
 	
-	minetest.log("action", "[fancy_place] Simple horizontal placement mod loaded successfully")
+	core.log("action", "[fancy_place] Simple horizontal placement mod loaded successfully")
 end)
